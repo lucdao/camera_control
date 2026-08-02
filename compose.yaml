@@ -1,0 +1,15 @@
+services:
+  ptz-control:
+    build: .
+    runtime: nvidia
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PTZ_ONVIF_USER: ${PTZ_ONVIF_USER}
+      PTZ_ONVIF_PASSWORD: ${PTZ_ONVIF_PASSWORD}
+    volumes:
+      - ./config/pipeline.yaml:/config/pipeline.yaml:ro
+      - ./models:/models:ro
+      - ./engines:/engines
+      - ./gallery:/data/gallery:ro
+    command: ["run", "--config", "/config/pipeline.yaml"]

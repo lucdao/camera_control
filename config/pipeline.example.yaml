@@ -1,0 +1,62 @@
+rtsp:
+  uri: "rtsp://camera.example/stream1"
+
+onvif:
+  endpoint: "http://camera.example/onvif/device_service"
+  user_env: PTZ_ONVIF_USER
+  password_env: PTZ_ONVIF_PASSWORD
+  profile_token: ""
+
+models:
+  models_dir: /models
+  engine_cache: /engines
+  gallery_dir: /data/gallery
+
+perception:
+  target_identity: target_01
+  scrfd_hz: 10
+  arcface_hz_search: 5
+  arcface_hz_locked: 2
+  pose_hz: 15
+  face_match_threshold: 0.45
+  ambiguity_margin: 0.08
+  confirmations_required: 2
+  confirmation_window: 3
+  face_min_score: 0.70
+  face_min_pixels: 80
+  coast_ms: 250
+  body_reid_window_ms: 1500
+
+control:
+  rate_hz: 20
+  stale_ms: 300
+  target_x: 0.50
+  target_y: 0.40
+  actuation_delay_ms: 40
+  deadzone_enter_deg: 0.35
+  deadzone_exit_deg: 0.55
+  one_euro_min_cutoff: 1.0
+  one_euro_beta: 0.02
+  kp: 0.60
+  ki: 0.00
+  kd: 0.05
+  kv: 0.10
+  max_pan_speed: 0.70
+  max_tilt_speed: 0.70
+  max_accel: 2.5
+  max_jerk: 15
+  command_change_threshold: 0.01
+  heartbeat_ms: 500
+  auto_zoom: true
+  target_face_height: 0.16
+  max_zoom_speed: 0.15
+  max_zoom_accel: 0.30
+  zoom_deadband: 0.15
+  # Each row is [normalized zoom, horizontal FOV degrees, vertical FOV degrees].
+  fov_calibration:
+    - [0.0, 60.0, 35.0]
+    - [0.5, 25.0, 14.0]
+    - [1.0, 6.0, 3.5]
+
+service:
+  health_port: 8080

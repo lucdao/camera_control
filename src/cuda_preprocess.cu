@@ -1,0 +1,18 @@
+#include "ptz/cuda_preprocess.hpp"
+#include <cuda_runtime.h>
+#include <stdexcept>
+
+namespace ptz {
+namespace {
+__device__ float sample(const unsigned char* src,std::size_t pitch,int width,int height,float x,float y,int c){
+  x=fminf(fmaxf(x,0.F),static_cast<float>(width-1));y=fminf(fmaxf(y,0.F),static_cast<float>(height-1));int x0=static_cast<int>(floorf(x)),y0=static_cast<int>(floorf(y));int x1=min(x0+1,width-1),y1=min(y0+1,height-1);float ax=x-x0,ay=y-y0;float p00=static_cast<float>(src[static_cast<std::size_t>(y0)*pitch+static_cast<std::size_t>(x0)*4U+static_cast<std::size_t>(c)]),p10=static_cast<float>(src[static_cast<std::size_t>(y0)*pitch+static_cast<std::size_t>(x1)*4U+static_cast<std::size_t>(c)]),p01=static_cast<float>(src[static_cast<std::size_t>(y1)*pitch+static_cast<std::size_t>(x0)*4U+static_cast<std::size_t>(c)]),p11=static_cast<float>(src[static_cast<std::size_t>(y1)*pitch+static_cast<std::size_t>(x1)*4U+static_cast<std::size_t>(c)]);return (1-ay)*((1-ax)*p00+ax*p10)+ay*((1-ax)*p01+ax*p11);
+}
+__global__ void letterbox_kernel(const unsigned char*src,std::size_t pitch,int w,int h,float*out,int size,float factor,float input_mean,float canvas,float scale,int px,int py){int x=blockIdx.x*blockDim.x+threadIdx.x,y=blockIdx.y*blockDim.y+threadIdx.y;if(x>=size||y>=size)return;float sx=(x-px+.5F)/scale-.5F,sy=(y-py+.5F)/scale-.5F;bool inside=x>=px&&y>=py&&x<px+static_cast<int>(w*scale+.5F)&&y<py+static_cast<int>(h*scale+.5F);for(int c=0;c<3;++c){float value=inside?sample(src,pitch,w,h,sx,sy,c):canvas;out[static_cast<std::size_t>(c)*size*size+static_cast<std::size_t>(y)*size+x]=(value-input_mean)*factor;}}
+__global__ void affine_kernel(const unsigned char*src,std::size_t pitch,int w,int h,float*out,float a,float b,float c,float d,float e,float f){int x=blockIdx.x*blockDim.x+threadIdx.x,y=blockIdx.y*blockDim.y+threadIdx.y;if(x>=112||y>=112)return;float sx=a*x+b*y+c,sy=d*x+e*y+f;for(int ch=0;ch<3;++ch)out[static_cast<std::size_t>(ch)*112U*112U+static_cast<std::size_t>(y)*112U+x]=(sample(src,pitch,w,h,sx,sy,ch)-127.5F)/127.5F;}
+__global__ void body_kernel(const unsigned char*src,std::size_t pitch,int w,int h,float*out,float x1,float y1,float bw,float bh){int x=blockIdx.x*blockDim.x+threadIdx.x,y=blockIdx.y*blockDim.y+threadIdx.y;if(x>=128||y>=256)return;float sx=x1+(x+.5F)*bw/128.F-.5F,sy=y1+(y+.5F)*bh/256.F-.5F;const float mean[3]{.485F,.456F,.406F},stddev[3]{.229F,.224F,.225F};for(int ch=0;ch<3;++ch){float v=sample(src,pitch,w,h,sx,sy,ch)/255.F;out[static_cast<std::size_t>(ch)*128U*256U+static_cast<std::size_t>(y)*128U+x]=(v-mean[ch])/stddev[ch];}}
+}
+void checked(){if(cudaGetLastError()!=cudaSuccess)throw std::runtime_error("CUDA preprocess kernel launch failed");}
+void cuda_letterbox_rgba(const FramePacket&f,float*out,int size,float factor,float input_mean,float canvas,float scale,int px,int py,void*s){dim3 block(16,16),grid((size+15)/16,(size+15)/16);letterbox_kernel<<<grid,block,0,static_cast<cudaStream_t>(s)>>>(reinterpret_cast<const unsigned char*>(f.cuda_device_ptr),f.cuda_pitch,f.width,f.height,out,size,factor,input_mean,canvas,scale,px,py);checked();}
+void cuda_affine_face_rgba(const FramePacket&f,float*out,const float m[6],void*s){dim3 block(16,16),grid(7,7);affine_kernel<<<grid,block,0,static_cast<cudaStream_t>(s)>>>(reinterpret_cast<const unsigned char*>(f.cuda_device_ptr),f.cuda_pitch,f.width,f.height,out,m[0],m[1],m[2],m[3],m[4],m[5]);checked();}
+void cuda_body_crop_rgba(const FramePacket&f,float*out,const Box&b,void*s){dim3 block(16,16),grid(8,16);body_kernel<<<grid,block,0,static_cast<cudaStream_t>(s)>>>(reinterpret_cast<const unsigned char*>(f.cuda_device_ptr),f.cuda_pitch,f.width,f.height,out,b.x1,b.y1,b.width(),b.height());checked();}
+} // namespace ptz

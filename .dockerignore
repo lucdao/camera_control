@@ -1,0 +1,8 @@
+build
+engines
+models
+gallery
+enrollment
+.git
+*.o
+*.engine
